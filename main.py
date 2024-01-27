@@ -1,9 +1,7 @@
-#pip install numpy Pillow tensorflow transformers
-
 import numpy as np
 import os
 import requests
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 import urllib
 from tensorflow.keras.applications import ResNet50
@@ -16,9 +14,10 @@ user_image_path = "https://dr.ntu.edu.sg/cris/rp/fileservice/rp00631/57/?filenam
 
 # 加载模型
 resnet_model = ResNet50(weights='imagenet', include_top=False, pooling='avg')
-vit_model = ViTForImageClassification.from_pretrained('google/vit-base-patch16-224')
+# vit_model = ViTForImageClassification.from_pretrained('google/vit-base-patch16-224')
 vit_processor = ViTImageProcessor.from_pretrained("google/vit-base-patch16-224")
 
+# 加载和处理图像的函数
 def load_and_process_image(image_path_or_url):
     if urllib.parse.urlparse(image_path_or_url).scheme in ('http', 'https'):
         response = requests.get(image_path_or_url)
@@ -28,6 +27,7 @@ def load_and_process_image(image_path_or_url):
     img = img.convert("RGB")
     return img
 
+# 提取特征的函数
 def extract_features_resnet(image_path):
     img = load_and_process_image(image_path)
     img = img.resize((224, 224))
@@ -43,6 +43,7 @@ def extract_features_vit(image_path):
     img = img.flatten()
     return img
 
+# 计算余弦相似度的函数
 def calculate_cosine_similarity(feature1, feature2):
     dot_product = np.dot(feature1, feature2)
     norm1 = np.linalg.norm(feature1)
@@ -51,7 +52,7 @@ def calculate_cosine_similarity(feature1, feature2):
     return similarity
 
 # 文件夹路径，包含所有角色的图像
-character_folder = "/content/drive/MyDrive/Colab Notebooks/genshin_jpgs"
+character_folder = "./genshin_jpgs"
 character_features_resnet = {}
 character_features_vit = {}
 
@@ -81,15 +82,36 @@ def find_most_similar_character(features, character_features):
 user_features_resnet = extract_features_resnet(user_image_path)
 user_features_vit = extract_features_vit(user_image_path)
 
-most_similar_character_resnet, _ = find_most_similar_character(user_features_resnet, character_features_resnet)
-most_similar_character_vit, _ = find_most_similar_character(user_features_vit, character_features_vit)
+most_similar_character_resnet, similarity_resnet = find_most_similar_character(user_features_resnet, character_features_resnet)
+most_similar_character_vit, similarity_vit = find_most_similar_character(user_features_vit, character_features_vit)
 
-# 显示用户照片和两个模型认为最相似的角色照片
+
+# 加载和处理图片
 user_photo = load_and_process_image(user_image_path)
 resnet_photo = Image.open(os.path.join(character_folder, most_similar_character_resnet + ".jpeg"))
 vit_photo = Image.open(os.path.join(character_folder, most_similar_character_vit + ".jpeg"))
 
+# 添加标题和相似度
+#user_photo = add_title_and_similarity_to_image(user_photo, "User Photo", 0)  # 用户照片的相似度设为0
+#resnet_photo = add_title_and_similarity_to_image(resnet_photo, "ResNet Similar Character", similarity_resnet)
+#vit_photo = add_title_and_similarity_to_image(vit_photo, "ViT Similar Character", similarity_vit)
 
-user_photo.show(title="User Photo")
-resnet_photo.show(title="ResNet Similar Character")
-vit_photo.show(title="ViT Similar Character")
+# 合并图片的函数
+def merge_images(images, spacing=10):
+    total_width = sum(img.size[0] for img in images) + spacing * (len(images) - 1)
+    max_height = max(img.size[1] for img in images)
+    new_im = Image.new('RGB', (total_width, max_height))
+
+    x_offset = 0
+    for img in images:
+        new_im.paste(img, (x_offset, 0))
+        x_offset += img.size[0] + spacing
+
+    return new_im
+
+# 合并图片并保存
+merged_image = merge_images([user_photo, resnet_photo, vit_photo])
+merged_image.save("output.jpg")
+
+print("Resnet similarity", similarity_resnet)
+print("VIT similarity", similarity_vit)
